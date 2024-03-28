@@ -77,7 +77,7 @@ class MongoDBAtlas():
         except Exception as e:
             print("Error in Model MongoDBVector Insert")
             print(e)
-            return {"success":False,"Error":e,"details":"Error in uploading files"}
+            raise Exception({"success":False,"Error":e,"details":"Error in uploading files"})
         
     def Update_Files(self, file, file_id, database, collection, embedding_model, index_name, chunk_size, chunk_overlap):
         """
@@ -108,8 +108,26 @@ class MongoDBAtlas():
         delete files or documents in MongoDBAtlast in specified collection, provide all parameters
         """
         print("\nInside Model__VectorDatabase_MongoDBAtlas : Delete_File\n")
-        
+
         collection=self.client[database][collection]
         collection.delete_many({"id":file_id})
         print("Successfully deleted in collection", collection)
         return {"success":True,"details":"File successfully deleted in collection"}
+    
+    # Database operations
+
+    def Get_Database(self, database):
+        """
+        get database in MongoDBAtlast, provide all parameters
+        """
+        print("\nInside Model__VectorDatabase_MongoDBAtlas : Get_Database\n")
+
+        try:
+            db=self.client[database]
+            print("Successfully got database", db)
+            return db
+        except Exception as e:
+            print("Error in Model MongoDBVector Get")
+            print(e)
+            raise Exception({"success":False,"Error":e,"details":"Error in getting database"})
+        

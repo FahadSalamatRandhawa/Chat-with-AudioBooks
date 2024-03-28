@@ -10,7 +10,7 @@ class User(SQLModel,table=True):
     email:str=Field(primary_key=True)
     created_at:datetime
 
-    databases:list["Database"]=Relationship(back_populates="owner")
+    databases:list["Database"]=Relationship(back_populates="owner",sa_relationship_kwargs={"cascade":"all, delete-orphan"})
 
 class Database(SQLModel, table=True):
     id:Optional[uuid.UUID]=Field(default_factory=uuid.uuid4, primary_key=True)
@@ -19,7 +19,7 @@ class Database(SQLModel, table=True):
     created_at:datetime
 
     owner:User=Relationship(back_populates="databases")
-    collections:list["Collection"]=Relationship(back_populates="database")
+    collections:list["Collection"]=Relationship(back_populates="database",sa_relationship_kwargs={"cascade":"all, delete-orphan"})
 
 class Collection(SQLModel, table=True):
     id:Optional[uuid.UUID]=Field(default_factory=uuid.uuid4, primary_key=True)
@@ -28,7 +28,7 @@ class Collection(SQLModel, table=True):
     created_at:datetime
 
     database:Database=Relationship(back_populates="collections")
-    files:list["File"]=Relationship(back_populates="collection")
+    files:list["File"]=Relationship(back_populates="collection",sa_relationship_kwargs={"cascade":"all, delete-orphan"})
 
 
 class File(SQLModel,table=True):
@@ -77,21 +77,33 @@ class FileManagementModel():
         return tempFile
     
         
-    def updateFile(self, file:UploadFile):
+    def updateFile(self, file:UploadFile,file_id):
         """
             updates file info in SQL database
         """
         print("Updating ", file.filename, " in postgresQL")
+        file_extension = file.filename.split('.')[-1]
         try:
             with Session(self.engine) as session:
-                stmt=update(File).where(File.id==file.id).values(file)
+                #newFile=File(file_id,name=file.filename,size=file.size,type=file.content_type,format=file_extension,updated_at=datetime.now())
+                stmt = (
+                update(File)
+                .where(File.id == file_id)
+                .values(
+                    name=file.filename,
+                    size=file.size,
+                    type=file.content_type,
+                    format=file_extension,
+                    updated_at=datetime.now()
+                    )
+                )
                 session.exec(stmt)
                 session.commit()
-                session.refresh(file)
+            print("Updated successfully\n")
             return file
         except Exception as e:
             print(e)
-            return {"Error":e,"details":"Error in updating file"}
+            raise Exception({"Error":e,"details":"Error in updating file"})
     
     def deleteFile(self, file:UploadFile):
         """
@@ -105,7 +117,7 @@ class FileManagementModel():
             return {"details":"File deleted"}
         except Exception as e:
             print(e)
-            return {"Error":e,"details":"Error in deleting file"}
+            raise Exception({"Error":e,"details":"Error in updating file"})
 
     # def createDatabaseAndCollection(self,email:str,database:str,collection:str):
     #     database=Database(email=email,name=database,created_at=datetime.now())
@@ -129,6 +141,18 @@ class FileManagementModel():
     
 
 # Databse Actions
+            
+    def getDatabase(self, database_id:str) -> Database:
+        print("Fetching database with id ", database_id)
+        with Session(self.engine) as session:
+            stmt=select(Database).where(Database.id==database_id)
+            database=session.exec(stmt).first()
+            if database:
+                print("Fetched successfully\n")
+                return database
+        print("Database not found with id ", database_id)
+        raise Exception("Database not found")
+    
     def createDatabase(self, email:str, database:str) -> Database:
         database=Database(email=email, name=database, created_at=datetime.now())
 
@@ -145,18 +169,7 @@ class FileManagementModel():
         print("Database created \n", database)
         return database
     
-    def getDatabase(self, database_id:str) -> Database:
-        print("Fetching database with id ", database_id)
-        with Session(self.engine) as session:
-            stmt=select(Database).where(Database.id==database_id)
-            database=session.exec(stmt).first()
-            if database:
-                print("Fetched successfully\n")
-                return database
-        print("Database not found with id ", database_id)
-        raise Exception("Database not found")
-    
-    def deleteDatabse(self, database_id:str) -> Database:
+    def deleteDatabase(self, database_id:str) -> Database:
         print("Deleting database with id ", database_id)
         with Session(self.engine) as session:
             stmt=select(Database).where(Database.id==database_id)
@@ -166,6 +179,12 @@ class FileManagementModel():
                 session.commit()
         print("Database deleted with id ", database_id)
         return database
+        # print("Deleting database with id ", database_id)
+        # with Session(self.engine) as session:
+        #     session.delete(Database)
+        #     session.commit()
+        # print("Database deleted with id ", database_id)
+        # return {"Success":True,"message":"Database deleted"}
 
 
 ## Collection actions
@@ -205,10 +224,10 @@ class FileManagementModel():
 
     ## Database and Collection Actions
     
-    def getDatabasesAndCollections(self, email:str):
+    def getDatabaseAndCollections(self, email:str):
         print("Fetching databases and collection with ",email)
         with Session(self.engine) as session:
-            query=select(Database,Collection).where(Database.email==email).join(Collection, isouter=False)
+            query=select(Database.collections).where(Database.email==email).join(Collection, isouter=False).distinct()
             result=session.exec(query).all()
             print("Fetched successfully\n")
             return result
